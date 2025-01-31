@@ -13,6 +13,29 @@
 - 支持表名前缀处理
 - 与 Go-Zero 框架无缝集成
 
+## 安装
+
+### 方式一：直接安装
+
+```bash
+go install github.com/tokmz/zero@latest
+```
+
+### 方式二：从源码安装
+
+```bash
+# 克隆项目
+git clone https://github.com/tokmz/zero.git
+
+# 进入项目目录
+cd zero
+
+# 编译安装
+go build -o zero
+```
+
+安装完成后，确保 `zero` 可执行文件在系统的 PATH 路径中。
+
 ## 模板说明
 
 默认模板位于 `template` 目录下：
