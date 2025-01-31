@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 var (
@@ -42,21 +45,15 @@ func main() {
 		tableList = strings.Split(*tables, ",")
 	}
 
-	// 初始化配置
-	config := Config{
-		Master: DSNConfig{
-			DSN: *dsn,
-		},
-	}
-
 	// 连接数据库
-	if err := NewMysql(config); err != nil {
+	db, err := gorm.Open(mysql.Open(*dsn), &gorm.Config{})
+	if err != nil {
 		fmt.Printf("连接数据库失败: %v\n", err)
 		os.Exit(1)
 	}
 
 	// 生成代码
-	if err := Generate(&GenerateOptions{
+	if err := Generate(db, &GenerateOptions{
 		DSN:      *dsn,
 		Dir:      *dir,
 		Tables:   tableList,

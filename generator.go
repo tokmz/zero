@@ -59,14 +59,14 @@ type IndexInfo struct {
 }
 
 // Generate 生成代码
-func Generate(opts *GenerateOptions) error {
+func Generate(db *gorm.DB, opts *GenerateOptions) error {
 	// 创建输出目录
 	if err := os.MkdirAll(opts.Dir, 0755); err != nil {
 		return fmt.Errorf("创建输出目录失败: %v", err)
 	}
 
 	// 获取数据库表信息
-	tables, err := getTables(DB(), opts.Tables)
+	tables, err := getTables(db, opts.Tables)
 	if err != nil {
 		return fmt.Errorf("获取表信息失败: %v", err)
 	}
