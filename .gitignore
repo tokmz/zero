@@ -1,0 +1,21 @@
+# Go 编译文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# IDE 文件
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+zero
+model.go
+orm.go
+vars.go
+model
