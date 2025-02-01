@@ -4,7 +4,7 @@ package main
 func parseRelations(relations []Relation) *Relations {
 	result := &Relations{}
 	for _, rel := range relations {
-		targetModel := toCamelCase(rel.Target)
+		targetModel := ToCamelCase(rel.Target)
 		switch rel.Type {
 		case "has_many":
 			result.HasMany = append(result.HasMany, HasManyRelation{
@@ -27,7 +27,7 @@ func parseRelations(relations []Relation) *Relations {
 		case "many2many":
 			result.ManyToMany = append(result.ManyToMany, ManyToManyRelation{
 				Table:          targetModel,
-				JoinTable:      toCamelCase(rel.JoinTable),
+				JoinTable:      ToCamelCase(rel.JoinTable),
 				JoinForeignKey: rel.ForeignKey,
 				References:     rel.References,
 				JoinReferences: rel.JoinReferences,

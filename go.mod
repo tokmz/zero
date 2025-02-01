@@ -5,8 +5,8 @@ go 1.23.5
 require (
 	github.com/spf13/viper v1.19.0
 	github.com/zeromicro/go-zero v1.8.0
-	go.opentelemetry.io/otel v1.34.0
-	go.opentelemetry.io/otel/trace v1.34.0
+	go.opentelemetry.io/otel v1.24.0
+	go.opentelemetry.io/otel/trace v1.24.0
 	golang.org/x/text v0.21.0
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12

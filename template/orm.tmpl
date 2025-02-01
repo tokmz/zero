@@ -17,7 +17,6 @@ import (
 	"gorm.io/plugin/dbresolver"
 )
 
-var db *gorm.DB
 
 // Config 数据库配置
 type Config struct {
@@ -70,18 +69,17 @@ type SourceConfig struct {
 // NewMysql 创建MySQL实例，支持读写分离
 // 主库用于处理写操作和事务
 // 从库用于处理读操作，支持多个从库和负载均衡
-func NewMysql(c Config) error {
+func NewMysql(c Config) (*gorm.DB, error) {
 	if c.Master.DSN == "" {
-		return fmt.Errorf("master dsn required")
+		return nil, fmt.Errorf("master dsn required")
 	}
 
 	// 连接主库
-	var err error
-	db, err = gorm.Open(mysql.Open(c.Master.DSN), &gorm.Config{
+	db, err := gorm.Open(mysql.Open(c.Master.DSN), &gorm.Config{
 		Logger: NewLogger(),
 	})
 	if err != nil {
-		return fmt.Errorf("connect master failed: %v", err)
+		return nil, fmt.Errorf("connect master failed: %v", err)
 	}
 
 	// 只有配置了从库时才设置读写分离
@@ -110,13 +108,13 @@ func NewMysql(c Config) error {
 
 		// 使用读写分离插件
 		if err = db.Use(resolver); err != nil {
-			return fmt.Errorf("use dbresolver failed: %v", err)
+			return nil, fmt.Errorf("use dbresolver failed: %v", err)
 		}
 	}
 
 	sqlDB, err := db.DB()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// 设置连接池
@@ -132,10 +130,10 @@ func NewMysql(c Config) error {
 
 	// 使用链路追踪插件
 	if err = db.Use(&TracePlugin{}); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return db, nil
 }
 
 // buildReplicaDialectors 构建从库连接
@@ -267,11 +265,11 @@ func (op *TracePlugin) after(db *gorm.DB) {
 }
 
 // Ping 检查数据库连接是否正常
-func Ping() error {
+func Ping(db *gorm.DB) error {
 	sqlDB, err := db.DB()
 	if err != nil {
 		return err
 	}
 	return sqlDB.Ping()
 }
-{{end}} 
+{{end}}

@@ -8,10 +8,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
-	"unicode"
 
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 	"gorm.io/gorm"
 )
 
@@ -34,74 +31,23 @@ func Generate(db *gorm.DB, opts *GenerateOptions) error {
 		return fmt.Errorf("加载模板失败: %v", err)
 	}
 
-	// 生成公共文件
-	if err := generateCommonFiles(opts, tmpl); err != nil {
+	// 生成orm.go
+	if err := generateOrmFile(opts, tmpl); err != nil {
 		return err
 	}
 
-	// 生成每个表的代码
-	for _, table := range tables {
-		// 去除表名前缀
-		modelName := table.Name
-		if opts.Prefix != "" {
-			modelName = strings.TrimPrefix(modelName, opts.Prefix)
-		}
-
-		// 转换为大驼峰命名
-		modelName = toCamelCase(modelName)
-
-		// 生成代码
-		data := map[string]interface{}{
-			"TableName":  table.Name,
-			"ModelName":  modelName,
-			"Fields":     table.Fields,
-			"Indexes":    table.Indexes,
-			"Comment":    table.Comment,
-			"Relations":  table.Relations,
-			"Package":    "model",                         // 默认包名
-			"ImportTime": containsTimeField(table.Fields), // 是否需要导入time包
-		}
-
-		// 根据style生成文件名
-		var fileName string
-		switch opts.Style {
-		case "snake":
-			fileName = toSnakeCase(modelName)
-		case "camel":
-			fileName = toCamelCase(modelName)
-			fileName = strings.ToLower(fileName[:1]) + fileName[1:]
-		case "pascal":
-			fileName = toCamelCase(modelName)
-		default:
-			fileName = toSnakeCase(modelName)
-		}
-
-		// 生成model文件
-		modelFile := filepath.Join(opts.Dir, fileName+".go")
-		if err := generateFile(tmpl, "model", modelFile, data); err != nil {
-			return fmt.Errorf("生成model文件失败: %v", err)
-		}
+	// 生成model文件
+	if err := generateModelFiles(tables, opts, tmpl); err != nil {
+		return err
 	}
 
-	return nil
-}
-
-// generateCommonFiles 生成公共文件
-func generateCommonFiles(opts *GenerateOptions, tmpl *template.Template) error {
-	// 生成orm.go
-	ormFile := filepath.Join(opts.Dir, "orm.go")
-	if err := generateFile(tmpl, "orm", ormFile, map[string]interface{}{
-		"Package": "model",
-	}); err != nil {
-		return fmt.Errorf("生成orm文件失败: %v", err)
+	// 生成query文件
+	if err := generateQueryFiles(tables, opts, tmpl); err != nil {
+		return err
 	}
 
-	// 生成vars.go
-	varsFile := filepath.Join(opts.Dir, "vars.go")
-	if err := generateFile(tmpl, "vars", varsFile, map[string]interface{}{
-		"Package": "model",
-	}); err != nil {
-		return fmt.Errorf("生成vars文件失败: %v", err)
+	if err := generateVarsFile(tables, opts, tmpl); err != nil {
+		return err
 	}
 
 	return nil
@@ -151,15 +97,15 @@ func getTableInfo(db *gorm.DB, tableName string, relations map[string][]Relation
 		return nil, err
 	}
 
-	// 获取字段信息
+	// 获取表的所有列信息
 	rows, err := db.Raw(`
 		SELECT 
-			column_name, 
-			data_type,
-			column_comment,
+			column_name,
+			column_type,
 			is_nullable,
 			column_key,
-			extra
+			extra,
+			column_comment
 		FROM information_schema.columns 
 		WHERE table_schema = DATABASE() 
 		AND table_name = ?
@@ -172,76 +118,71 @@ func getTableInfo(db *gorm.DB, tableName string, relations map[string][]Relation
 
 	for rows.Next() {
 		var field FieldInfo
-		var dataType, isNullable, columnKey, extra string
-		if err := rows.Scan(&field.Name, &dataType, &field.Comment, &isNullable, &columnKey, &extra); err != nil {
+		var columnType, isNullable, columnKey, extra string
+		if err := rows.Scan(
+			&field.Name,
+			&columnType,
+			&isNullable,
+			&columnKey,
+			&extra,
+			&field.Comment,
+		); err != nil {
 			return nil, err
 		}
 
-		// 转换字段名为大驼峰
-		field.Name = toCamelCase(field.Name)
-
-		field.IsNullable = isNullable == "YES"
-		field.IsPrimary = columnKey == "PRI"
-		field.Type = convertDataType(dataType)
-		field.Tag = generateTag(toSnakeCase(field.Name), field.IsNullable, field.IsPrimary, extra == "auto_increment", dataType, field.Comment)
+		// 处理字段类型
+		field.Type = ConvertDataType(strings.Split(columnType, "(")[0])
+		field.Tag = GenerateTag(
+			field.Name,
+			isNullable == "NO",
+			columnKey == "PRI",
+			strings.Contains(extra, "auto_increment"),
+			strings.Split(columnType, "(")[0],
+			field.Comment,
+		)
 
 		tableInfo.Fields = append(tableInfo.Fields, field)
 	}
 
-	// 获取索引信息
-	rows, err = db.Raw(`
-		SELECT DISTINCT
-			s1.index_name,
-			GROUP_CONCAT(s1.column_name ORDER BY s1.seq_in_index) as columns,
-			s1.non_unique
-		FROM information_schema.statistics s1
-		JOIN (
-			SELECT index_name, MIN(seq_in_index) as min_seq
-			FROM information_schema.statistics
-			WHERE table_schema = DATABASE()
-			AND table_name = ?
-			GROUP BY index_name
-		) s2 ON s1.index_name = s2.index_name
-		WHERE s1.table_schema = DATABASE()
-		AND s1.table_name = ?
-		GROUP BY s1.index_name, s1.non_unique
-	`, tableName, tableName).Rows()
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var index IndexInfo
-		var columns string
-		var nonUnique int
-		if err := rows.Scan(&index.Name, &columns, &nonUnique); err != nil {
-			return nil, err
-		}
-
-		index.Fields = strings.Split(columns, ",")
-		index.IsUniq = nonUnique == 0
-		index.IsPK = index.Name == "PRIMARY"
-
-		tableInfo.Indexes = append(tableInfo.Indexes, index)
-	}
-
 	// 处理关联关系
-	if relations != nil {
-		if tableRelations, ok := relations[tableName]; ok {
-			tableInfo.Relations = parseTableRelations(tableRelations)
-		}
+	if rels, ok := relations[tableName]; ok {
+		tableInfo.Relations = ParseTableRelations(rels)
 	}
 
 	return &tableInfo, nil
 }
 
+// generateFile 生成文件
+func generateFile(tmpl *template.Template, name, file string, data interface{}) error {
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
+		return err
+	}
+
+	// 处理生成的内容
+	content := buf.String()
+	// 删除多余的空行
+	content = strings.ReplaceAll(content, "\n\n\n", "\n\n")
+	// 删除文件末尾的空行
+	content = strings.TrimRight(content, "\n")
+	// 确保文件以一个换行符结束
+	content = content + "\n"
+
+	return os.WriteFile(file, []byte(content), 0644)
+}
+
 // loadTemplates 加载模板文件
 func loadTemplates(templateDir string) (*template.Template, error) {
 	funcMap := template.FuncMap{
-		"generateTag": generateTag,
-		"toCamelCase": toCamelCase,
-		"toSnakeCase": toSnakeCase,
+		"generateTag": GenerateTag,
+		"toCamelCase": ToCamelCase,
+		"toSnakeCase": ToSnakeCase,
+		"toLowerCamel": func(s string) string {
+			if s == "" {
+				return s
+			}
+			return strings.ToLower(s[:1]) + s[1:]
+		},
 		"now": func(layout string) string {
 			return time.Now().Format(layout)
 		},
@@ -265,6 +206,7 @@ func loadTemplates(templateDir string) (*template.Template, error) {
 		filepath.Join(templateDir, "model.tmpl"),
 		filepath.Join(templateDir, "orm.tmpl"),
 		filepath.Join(templateDir, "vars.tmpl"),
+		filepath.Join(templateDir, "query.tmpl"),
 	}
 
 	// 检查所有必需的模板文件是否存在
@@ -274,164 +216,23 @@ func loadTemplates(templateDir string) (*template.Template, error) {
 		}
 	}
 
-	// 解析所有模板文件
-	return tmpl.ParseFiles(templateFiles...)
-}
+	// 读取每个模板文件的内容
+	for _, file := range templateFiles {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("读取模板文件失败 %s: %v", file, err)
+		}
 
-// generateFile 生成文件
-func generateFile(tmpl *template.Template, name, file string, data interface{}) error {
-	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
-		return err
-	}
+		// 获取模板名称（不包含扩展名）
+		templateName := filepath.Base(file)
+		templateName = strings.TrimSuffix(templateName, ".tmpl")
 
-	// 处理生成的内容
-	content := buf.String()
-	// 删除多余的空行
-	content = strings.ReplaceAll(content, "\n\n\n", "\n\n")
-	// 删除文件末尾的空行
-	content = strings.TrimRight(content, "\n")
-	// 确保文件以一个换行符结束
-	content = content + "\n"
-
-	return os.WriteFile(file, []byte(content), 0644)
-}
-
-// convertDataType 转换数据类型
-func convertDataType(dbType string) string {
-	switch dbType {
-	case "int", "tinyint", "smallint", "mediumint":
-		return "int32"
-	case "bigint":
-		return "int64"
-	case "char", "varchar", "tinytext", "text", "mediumtext", "longtext":
-		return "string"
-	case "date", "datetime", "timestamp":
-		return "time.Time"
-	case "decimal", "float", "double":
-		return "float64"
-	case "bool", "boolean":
-		return "bool"
-	default:
-		return "string"
-	}
-}
-
-// generateTag 生成结构体标签
-func generateTag(name string, nullable bool, isPrimary bool, isAutoIncrement bool, dataType string, comment string) string {
-	var tags []string
-
-	// 添加列名
-	tags = append(tags, fmt.Sprintf("column:%s", name))
-
-	// 添加主键
-	if isPrimary {
-		tags = append(tags, "primaryKey")
-		if isAutoIncrement {
-			tags = append(tags, "autoIncrement")
+		// 解析模板内容
+		tmpl, err = tmpl.New(templateName).Parse(string(content))
+		if err != nil {
+			return nil, fmt.Errorf("解析模板文件失败 %s: %v", file, err)
 		}
 	}
 
-	// 添加非空约束
-	if !nullable {
-		tags = append(tags, "not null")
-	}
-
-	// 添加类型
-	switch dataType {
-	case "varchar", "char":
-		tags = append(tags, "type:varchar(255)")
-	case "text":
-		tags = append(tags, "type:text")
-	case "datetime", "timestamp":
-		tags = append(tags, "type:datetime")
-	case "int", "tinyint", "smallint", "mediumint":
-		tags = append(tags, "type:int")
-	case "bigint":
-		tags = append(tags, "type:bigint unsigned")
-	case "decimal", "float", "double":
-		tags = append(tags, "type:decimal(10,2)")
-	case "bool", "boolean":
-		tags = append(tags, "type:tinyint(1)")
-	}
-
-	// 添加注释
-	if comment != "" {
-		tags = append(tags, fmt.Sprintf("comment:%s", comment))
-	}
-
-	// 使用反引号避免转义问题
-	return "`" + fmt.Sprintf(`gorm:"%s"`, strings.Join(tags, ";")) + "`"
-}
-
-// toCamelCase 转换为大驼峰命名
-func toCamelCase(s string) string {
-	s = strings.ReplaceAll(s, "_", " ")
-	s = cases.Title(language.English).String(s)
-	return strings.ReplaceAll(s, " ", "")
-}
-
-// toSnakeCase 转换为下划线命名
-func toSnakeCase(s string) string {
-	var result []rune
-	for i, r := range s {
-		if i > 0 && unicode.IsUpper(r) {
-			result = append(result, '_')
-		}
-		result = append(result, unicode.ToLower(r))
-	}
-	return string(result)
-}
-
-// parseTableRelations 解析关联关系配置
-func parseTableRelations(relations []Relation) *Relations {
-	result := &Relations{}
-
-	for _, rel := range relations {
-		// 转换目标表名为大驼峰
-		targetModel := toCamelCase(rel.Target)
-		fmt.Printf("解析关联关系: target=%s, type=%s, foreignKey=%s, references=%s\n",
-			targetModel, rel.Type, rel.ForeignKey, rel.References)
-
-		switch rel.Type {
-		case "has_many":
-			result.HasMany = append(result.HasMany, HasManyRelation{
-				Table:      targetModel,
-				ForeignKey: rel.ForeignKey,
-				References: rel.References,
-			})
-		case "has_one":
-			result.HasOne = append(result.HasOne, HasOneRelation{
-				Table:      targetModel,
-				ForeignKey: rel.ForeignKey,
-				References: rel.References,
-			})
-		case "belongs_to":
-			result.BelongsTo = append(result.BelongsTo, BelongsToRelation{
-				Table:      targetModel,
-				ForeignKey: rel.ForeignKey,
-				References: rel.References,
-			})
-		case "many2many":
-			result.ManyToMany = append(result.ManyToMany, ManyToManyRelation{
-				Table:          targetModel,
-				JoinTable:      rel.JoinTable,
-				JoinForeignKey: rel.ForeignKey,
-				References:     rel.References,
-				JoinReferences: rel.JoinReferences,
-			})
-		}
-	}
-
-	return result
-}
-
-// containsTimeField 检查字段中是否包含时间类型
-func containsTimeField(fields []FieldInfo) bool {
-	for _, field := range fields {
-		if field.Type == "time.Time" {
-			return true
-		}
-	}
-	return false
+	return tmpl, nil
 }
