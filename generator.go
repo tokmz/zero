@@ -15,49 +15,6 @@ import (
 	"gorm.io/gorm"
 )
 
-/*
-   @NAME    : generator
-   @author  : 清风
-   @desc    :
-   @time    : 2025/1/31 21:15
-*/
-
-// GenerateOptions 代码生成的配置选项
-type GenerateOptions struct {
-	DSN      string   // 数据库连接字符串
-	Dir      string   // 输出目录
-	Tables   []string // 要生成的表名列表
-	Prefix   string   // 表名前缀
-	Template string   // 自定义模板路径
-	Style    string   // 文件命名风格: snake(下划线), camel(小驼峰), pascal(大驼峰)
-}
-
-// TableInfo 表信息
-type TableInfo struct {
-	Name    string      // 表名
-	Comment string      // 表注释
-	Fields  []FieldInfo // 字段列表
-	Indexes []IndexInfo // 索引列表
-}
-
-// FieldInfo 字段信息
-type FieldInfo struct {
-	Name       string // 字段名
-	Type       string // 字段类型
-	Comment    string // 字段注释
-	Tag        string // 结构体标签
-	IsNullable bool   // 是否可为空
-	IsPrimary  bool   // 是否是主键
-}
-
-// IndexInfo 索引信息
-type IndexInfo struct {
-	Name   string   // 索引名
-	Fields []string // 索引字段
-	IsPK   bool     // 是否是主键
-	IsUniq bool     // 是否是唯一索引
-}
-
 // Generate 生成代码
 func Generate(db *gorm.DB, opts *GenerateOptions) error {
 	// 创建输出目录
@@ -66,7 +23,7 @@ func Generate(db *gorm.DB, opts *GenerateOptions) error {
 	}
 
 	// 获取数据库表信息
-	tables, err := getTables(db, opts.Tables)
+	tables, err := getTables(db, opts.Tables, opts.Relations)
 	if err != nil {
 		return fmt.Errorf("获取表信息失败: %v", err)
 	}
@@ -95,12 +52,14 @@ func Generate(db *gorm.DB, opts *GenerateOptions) error {
 
 		// 生成代码
 		data := map[string]interface{}{
-			"TableName": table.Name,
-			"ModelName": modelName,
-			"Fields":    table.Fields,
-			"Indexes":   table.Indexes,
-			"Comment":   table.Comment,
-			"Package":   "model", // 默认包名
+			"TableName":  table.Name,
+			"ModelName":  modelName,
+			"Fields":     table.Fields,
+			"Indexes":    table.Indexes,
+			"Comment":    table.Comment,
+			"Relations":  table.Relations,
+			"Package":    "model",                         // 默认包名
+			"ImportTime": containsTimeField(table.Fields), // 是否需要导入time包
 		}
 
 		// 根据style生成文件名
@@ -149,7 +108,7 @@ func generateCommonFiles(opts *GenerateOptions, tmpl *template.Template) error {
 }
 
 // getTables 获取数据库表信息
-func getTables(db *gorm.DB, tables []string) ([]TableInfo, error) {
+func getTables(db *gorm.DB, tables []string, relations map[string][]Relation) ([]TableInfo, error) {
 	var result []TableInfo
 
 	// 如果没有指定表名，则获取所有表
@@ -171,7 +130,7 @@ func getTables(db *gorm.DB, tables []string) ([]TableInfo, error) {
 
 	// 获取每个表的详细信息
 	for _, table := range tables {
-		info, err := getTableInfo(db, table)
+		info, err := getTableInfo(db, table, relations)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +141,7 @@ func getTables(db *gorm.DB, tables []string) ([]TableInfo, error) {
 }
 
 // getTableInfo 获取单个表的详细信息
-func getTableInfo(db *gorm.DB, tableName string) (*TableInfo, error) {
+func getTableInfo(db *gorm.DB, tableName string, relations map[string][]Relation) (*TableInfo, error) {
 	var tableInfo TableInfo
 	tableInfo.Name = tableName
 
@@ -218,10 +177,13 @@ func getTableInfo(db *gorm.DB, tableName string) (*TableInfo, error) {
 			return nil, err
 		}
 
+		// 转换字段名为大驼峰
+		field.Name = toCamelCase(field.Name)
+
 		field.IsNullable = isNullable == "YES"
 		field.IsPrimary = columnKey == "PRI"
 		field.Type = convertDataType(dataType)
-		field.Tag = generateTag(field.Name, field.IsNullable, field.IsPrimary, extra == "auto_increment", dataType, field.Comment)
+		field.Tag = generateTag(toSnakeCase(field.Name), field.IsNullable, field.IsPrimary, extra == "auto_increment", dataType, field.Comment)
 
 		tableInfo.Fields = append(tableInfo.Fields, field)
 	}
@@ -262,6 +224,13 @@ func getTableInfo(db *gorm.DB, tableName string) (*TableInfo, error) {
 		index.IsPK = index.Name == "PRIMARY"
 
 		tableInfo.Indexes = append(tableInfo.Indexes, index)
+	}
+
+	// 处理关联关系
+	if relations != nil {
+		if tableRelations, ok := relations[tableName]; ok {
+			tableInfo.Relations = parseTableRelations(tableRelations)
+		}
 	}
 
 	return &tableInfo, nil
@@ -316,7 +285,16 @@ func generateFile(tmpl *template.Template, name, file string, data interface{}) 
 		return err
 	}
 
-	return os.WriteFile(file, buf.Bytes(), 0644)
+	// 处理生成的内容
+	content := buf.String()
+	// 删除多余的空行
+	content = strings.ReplaceAll(content, "\n\n\n", "\n\n")
+	// 删除文件末尾的空行
+	content = strings.TrimRight(content, "\n")
+	// 确保文件以一个换行符结束
+	content = content + "\n"
+
+	return os.WriteFile(file, []byte(content), 0644)
 }
 
 // convertDataType 转换数据类型
@@ -342,16 +320,19 @@ func convertDataType(dbType string) string {
 // generateTag 生成结构体标签
 func generateTag(name string, nullable bool, isPrimary bool, isAutoIncrement bool, dataType string, comment string) string {
 	var tags []string
+
+	// 添加列名
 	tags = append(tags, fmt.Sprintf("column:%s", name))
 
+	// 添加主键
 	if isPrimary {
 		tags = append(tags, "primaryKey")
+		if isAutoIncrement {
+			tags = append(tags, "autoIncrement")
+		}
 	}
 
-	if isAutoIncrement {
-		tags = append(tags, "autoIncrement")
-	}
-
+	// 添加非空约束
 	if !nullable {
 		tags = append(tags, "not null")
 	}
@@ -367,7 +348,7 @@ func generateTag(name string, nullable bool, isPrimary bool, isAutoIncrement boo
 	case "int", "tinyint", "smallint", "mediumint":
 		tags = append(tags, "type:int")
 	case "bigint":
-		tags = append(tags, "type:bigint")
+		tags = append(tags, "type:bigint unsigned")
 	case "decimal", "float", "double":
 		tags = append(tags, "type:decimal(10,2)")
 	case "bool", "boolean":
@@ -379,7 +360,8 @@ func generateTag(name string, nullable bool, isPrimary bool, isAutoIncrement boo
 		tags = append(tags, fmt.Sprintf("comment:%s", comment))
 	}
 
-	return fmt.Sprintf("gorm:\"%s\"", strings.Join(tags, ";"))
+	// 使用反引号避免转义问题
+	return "`" + fmt.Sprintf(`gorm:"%s"`, strings.Join(tags, ";")) + "`"
 }
 
 // toCamelCase 转换为大驼峰命名
@@ -399,4 +381,57 @@ func toSnakeCase(s string) string {
 		result = append(result, unicode.ToLower(r))
 	}
 	return string(result)
+}
+
+// parseTableRelations 解析关联关系配置
+func parseTableRelations(relations []Relation) *Relations {
+	result := &Relations{}
+
+	for _, rel := range relations {
+		// 转换目标表名为大驼峰
+		targetModel := toCamelCase(rel.Target)
+		fmt.Printf("解析关联关系: target=%s, type=%s, foreignKey=%s, references=%s\n",
+			targetModel, rel.Type, rel.ForeignKey, rel.References)
+
+		switch rel.Type {
+		case "has_many":
+			result.HasMany = append(result.HasMany, HasManyRelation{
+				Table:      targetModel,
+				ForeignKey: rel.ForeignKey,
+				References: rel.References,
+			})
+		case "has_one":
+			result.HasOne = append(result.HasOne, HasOneRelation{
+				Table:      targetModel,
+				ForeignKey: rel.ForeignKey,
+				References: rel.References,
+			})
+		case "belongs_to":
+			result.BelongsTo = append(result.BelongsTo, BelongsToRelation{
+				Table:      targetModel,
+				ForeignKey: rel.ForeignKey,
+				References: rel.References,
+			})
+		case "many2many":
+			result.ManyToMany = append(result.ManyToMany, ManyToManyRelation{
+				Table:          targetModel,
+				JoinTable:      rel.JoinTable,
+				JoinForeignKey: rel.ForeignKey,
+				References:     rel.References,
+				JoinReferences: rel.JoinReferences,
+			})
+		}
+	}
+
+	return result
+}
+
+// containsTimeField 检查字段中是否包含时间类型
+func containsTimeField(fields []FieldInfo) bool {
+	for _, field := range fields {
+		if field.Type == "time.Time" {
+			return true
+		}
+	}
+	return false
 }

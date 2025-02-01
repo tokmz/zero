@@ -4,19 +4,42 @@
 
 package {{.Package}}
 
+{{if .ImportTime}}
 import (
 	"context"
 	"time"
 
 	"gorm.io/gorm"
 )
+{{else}}
+import (
+	"context"
+
+	"gorm.io/gorm"
+)
+{{end}}
 
 // {{.ModelName}} {{.Comment}}
 type {{.ModelName}} struct {
-	{{range .Fields}}
-	{{if .Comment}}// {{.Comment}}{{end}}
-	{{toCamelCase .Name}} {{.Type}} `{{.Tag}}`
-	{{end}}
+	{{- range .Fields}}
+	{{.Name}} {{.Type}} {{.Tag}} // {{.Comment}}
+	{{- end}}
+	{{- if .Relations}}
+
+	// 关联关系
+	{{- range .Relations.HasOne}}
+	{{.Table}} *{{.Table}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}"` // 一对一关系
+	{{- end}}
+	{{- range .Relations.HasMany}}
+	{{.Table}}List []{{.Table}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}"` // 一对多关系
+	{{- end}}
+	{{- range .Relations.BelongsTo}}
+	{{.Table}} *{{.Table}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}"` // 从属关系
+	{{- end}}
+	{{- range .Relations.ManyToMany}}
+	{{.Table}}List []{{.Table}} `gorm:"many2many:{{.JoinTable}};foreignKey:{{.JoinForeignKey}};references:{{.References}};joinForeignKey:{{.JoinReferences}}"` // 多对多关系
+	{{- end}}
+	{{- end}}
 }
 
 // TableName 表名
@@ -38,5 +61,26 @@ func (m *{{.ModelName}}) WithContext(ctx context.Context) *gorm.DB {
 func (m *{{.ModelName}}) Transaction(ctx context.Context, fn func(tx *gorm.DB) error) error {
 	return m.WithContext(ctx).Transaction(fn)
 }
+
+{{if .Relations}}// 预加载方法
+{{range .Relations.HasOne}}// Preload{{.Table}} 预加载{{.Table}}
+func (m *{{$.ModelName}}) Preload{{.Table}}(db *gorm.DB) *gorm.DB {
+	return db.Preload("{{.Table}}")
+}
 {{end}}
+{{range .Relations.HasMany}}// Preload{{.Table}}List 预加载{{.Table}}列表
+func (m *{{$.ModelName}}) Preload{{.Table}}List(db *gorm.DB) *gorm.DB {
+	return db.Preload("{{.Table}}List")
+}
+{{end}}
+{{range .Relations.BelongsTo}}// Preload{{.Table}} 预加载{{.Table}}
+func (m *{{$.ModelName}}) Preload{{.Table}}(db *gorm.DB) *gorm.DB {
+	return db.Preload("{{.Table}}")
+}
+{{end}}
+{{range .Relations.ManyToMany}}// Preload{{.Table}}List 预加载{{.Table}}列表
+func (m *{{$.ModelName}}) Preload{{.Table}}List(db *gorm.DB) *gorm.DB {
+	return db.Preload("{{.Table}}List")
+}
+{{end}}{{end}}{{end}}
 
