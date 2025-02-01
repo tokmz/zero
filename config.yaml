@@ -1,14 +1,20 @@
+# 数据库连接
 dsn: root:123456@tcp(127.0.0.1:3306)/chilian_user?charset=utf8mb4&parseTime=True&loc=Local
+# model生成目录路径
 dir: ./model
+# 指定生成的表
 tables:
+# 忽略表前缀
 prefix:
+# 生成代码文件名格式 snake|camel|pascal
 style: snake
+# 自定义模板路径
 template:
 
 # 关联关系配置
 relations:
   user: # 用户表关联关系
-    - target: user_login_log
-      type: has_many
-      foreign_key: user_id
-      references: id
+    - target: user_login_log # 目标表
+      type: has_many # 关联类型
+      foreign_key: user_id # 外键
+      references: id # 引用键
