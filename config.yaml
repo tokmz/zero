@@ -1,4 +1,4 @@
-dsn: root:wui11413@tcp(127.0.0.1:3306)/chilian_user?charset=utf8mb4&parseTime=True&loc=Local
+dsn: root:123456@tcp(127.0.0.1:3306)/chilian_user?charset=utf8mb4&parseTime=True&loc=Local
 dir: ./model
 tables:
 prefix:
