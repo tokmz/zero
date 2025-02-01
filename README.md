@@ -160,7 +160,7 @@ package model
 
 type User struct {
     ID        int64     `gorm:"column:id;primaryKey;autoIncrement;type:bigint;comment:用户ID"`
-    Username  string    `gorm:"column:username;not null;type:varchar(255);comment:用户名"`
+    Username  string    `go[cl_category.gen.go](..%2Fchiling%2Finternal%2Fmodel%2Fquery%2Fcl_category.gen.go)rm:"column:username;not null;type:varchar(255);comment:用户名"`
     CreatedAt time.Time `gorm:"column:created_at;not null;type:datetime;comment:创建时间"`
 }
 

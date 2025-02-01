@@ -19,3 +19,4 @@ model.go
 orm.go
 vars.go
 model
+config.yaml
