@@ -66,6 +66,29 @@ template/
 
 # 生成指定表的模型
 ./zero_orm -dsn "..." -tables user,order,product
+
+# 使用配置文件
+./zero_orm -config config.yaml
+```
+
+### 配置文件示例
+
+```yaml
+# config.yaml
+dsn: root:123456@tcp(127.0.0.1:3306)/mydb?charset=utf8mb4&parseTime=True&loc=Local
+dir: ./model
+tables: # 要生成的表，为空则生成所有表
+prefix: # 表名前缀
+style: snake # 文件命名风格：snake/camel/pascal
+template: # 自定义模板目录
+
+# 关联关系配置
+relations:
+  user: # 用户表关联关系
+    - target: user_login_log # 目标表
+      type: has_many # 关系类型：has_many/has_one/belongs_to/many2many
+      foreign_key: user_id # 外键
+      references: id # 引用键
 ```
 
 ### 命名风格
