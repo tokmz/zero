@@ -20,7 +20,7 @@ var (
 
 	// 查询对象
 	{{- range .Tables}}
-	{{.ModelName | toLowerCamel}}QueryObj = &{{.ModelName | toLowerCamel}}Query{}
+	{{.ModelName}}QueryObj = &{{.ModelName}}Query{}
 	{{- end}}
 )
 
@@ -29,7 +29,7 @@ func SetDB(db *gorm.DB) {
 	DB = db
 	// 初始化查询对象
 	{{- range .Tables}}
-	{{.ModelName | toLowerCamel}}QueryObj.Use(db)
+	{{.ModelName}}QueryObj.Use(db)
 	{{- end}}
 }
 
@@ -58,10 +58,4 @@ func TransactionCtx(ctx context.Context, fc func(tx *gorm.DB) error, opts ...*sq
 	return DB.WithContext(ctx).Transaction(fc, opts...)
 }
 
-// 查询方法
-{{- range .Tables}}
-func {{.ModelName}}Query() *{{.ModelName | toLowerCamel}}Query {
-	return {{.ModelName | toLowerCamel}}QueryObj
-}
-{{- end}}
 {{end}}
