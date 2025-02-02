@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const Version = "v0.1.0"
+const Version = "v1.0.1"
 
 var (
 	// 版本信息
