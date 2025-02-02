@@ -20,3 +20,4 @@ orm.go
 vars.go
 model
 test
+config.yaml

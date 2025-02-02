@@ -252,25 +252,45 @@ func (q *{{.ModelName | toLowerCamel}}Query) Scan(dest interface{}) error {
 }
 
 // FindByPage 分页查询
-func (q *{{.ModelName | toLowerCamel}}Query) FindByPage(page, pageSize int) ([]*{{.ModelName}}, int64, error) {
+func (q *{{.ModelName | toLowerCamel}}Query) FindByPage(page, size int) ([]*{{.ModelName}}, int64, error) {
 	var total int64
-	if err := q.db.Model(&{{.ModelName}}{}).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
 	var results []*{{.ModelName}}
-	err := q.db.Offset((page - 1) * pageSize).Limit(pageSize).Find(&results).Error
+
+	err := q.db.Transaction(func(tx *gorm.DB) error {
+		// 统计总数
+		if err := tx.Model(&{{.ModelName}}{}).Count(&total).Error; err != nil {
+			return err
+		}
+
+		// 查询数据
+		if err := tx.Offset(page).Limit(size).Find(&results).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	return results, total, err
 }
 
 // ScanByPage 分页扫描
-func (q *{{.ModelName | toLowerCamel}}Query) ScanByPage(result interface{}, page, pageSize int) (int64, error) {
+func (q *{{.ModelName | toLowerCamel}}Query) ScanByPage(result interface{}, page, size int) (int64, error) {
 	var total int64
-	if err := q.db.Model(&{{.ModelName}}{}).Count(&total).Error; err != nil {
-		return 0, err
-	}
 
-	err := q.db.Offset((page - 1) * pageSize).Limit(pageSize).Scan(result).Error
+	err := q.db.Transaction(func(tx *gorm.DB) error {
+		// 统计总数
+		if err := tx.Model(&{{.ModelName}}{}).Count(&total).Error; err != nil {
+			return err
+		}
+
+		// 扫描数据
+		if err := tx.Offset((page - 1) * size).Limit(size).Scan(result).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	return total, err
 }
 {{end}}
