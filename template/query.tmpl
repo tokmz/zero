@@ -18,19 +18,25 @@ type {{.ModelName}}Query struct {
 
 // Use 使用指定的数据库连接
 func (q *{{.ModelName}}Query) Use(db *gorm.DB) *{{.ModelName}}Query {
-	q.db = db
+	q.db = db.Model(&{{.ModelName}}{})
 	return q
 }
 
 // Session 创建新会话
 func (q *{{.ModelName}}Query) Session(config *gorm.Session) *{{.ModelName}}Query {
 	q.db = q.db.Session(config)
+	if q.db.Statement.Model == nil {
+		q.db = q.db.Model(&{{.ModelName}}{})
+	}
 	return q
 }
 
 // WithContext 设置上下文
 func (q *{{.ModelName}}Query) WithContext(ctx context.Context) *{{.ModelName}}Query {
 	q.db = q.db.WithContext(ctx)
+	if q.db.Statement.Model == nil {
+		q.db = q.db.Model(&{{.ModelName}}{})
+	}
 	return q
 }
 
@@ -196,8 +202,11 @@ func (q *{{.ModelName}}Query) FirstOrCreate() (*{{.ModelName}}, error) {
 
 // Count 统计记录数
 func (q *{{.ModelName}}Query) Count() (int64, error) {
+	if q.db.Statement.Model == nil {
+		q.db = q.db.Model(&{{.ModelName}}{})
+	}
 	var count int64
-	err := q.db.Model(&{{.ModelName}}{}).Count(&count).Error
+	err := q.db.Count(&count).Error
 	return count, err
 }
 
@@ -223,42 +232,51 @@ func (q *{{.ModelName}}Query) Delete(data *{{.ModelName}}) error {
 
 // Update 更新单个字段
 func (q *{{.ModelName}}Query) Update(column string, value interface{}) error {
-	return q.db.Model(&{{.ModelName}}{}).Update(column, value).Error
+	if q.db.Statement.Model == nil {
+		q.db = q.db.Model(&{{.ModelName}}{})
+	}
+	return q.db.Update(column, value).Error
 }
 
 // Updates 更新多个字段
 func (q *{{.ModelName}}Query) Updates(values interface{}) error {
-	return q.db.Model(&{{.ModelName}}{}).Updates(values).Error
+	if q.db.Statement.Model == nil {
+		q.db = q.db.Model(&{{.ModelName}}{})
+	}
+	return q.db.Updates(values).Error
 }
 
 // UpdateColumn 更新单个字段(忽略钩子)
 func (q *{{.ModelName}}Query) UpdateColumn(column string, value interface{}) error {
-	return q.db.Model(&{{.ModelName}}{}).UpdateColumn(column, value).Error
+	return q.db.UpdateColumn(column, value).Error
 }
 
 // UpdateColumns 更新多个字段(忽略钩子)
 func (q *{{.ModelName}}Query) UpdateColumns(values interface{}) error {
-	return q.db.Model(&{{.ModelName}}{}).UpdateColumns(values).Error
+	return q.db.UpdateColumns(values).Error
 }
 
 // Pluck 查询单个列
 func (q *{{.ModelName}}Query) Pluck(column string, dest interface{}) error {
-	return q.db.Model(&{{.ModelName}}{}).Pluck(column, dest).Error
+	return q.db.Pluck(column, dest).Error
 }
 
 // Scan 扫描结果
 func (q *{{.ModelName}}Query) Scan(dest interface{}) error {
-	return q.db.Model(&{{.ModelName}}{}).Scan(dest).Error
+	return q.db.Scan(dest).Error
 }
 
 // FindByPage 分页查询
 func (q *{{.ModelName}}Query) FindByPage(page, size int) ([]*{{.ModelName}}, int64, error) {
+	if q.db.Statement.Model == nil {
+		q.db = q.db.Model(&{{.ModelName}}{})
+	}
 	var total int64
 	var results []*{{.ModelName}}
 
 	err := q.db.Transaction(func(tx *gorm.DB) error {
 		// 统计总数
-		if err := tx.Model(&{{.ModelName}}{}).Count(&total).Error; err != nil {
+		if err := tx.Count(&total).Error; err != nil {
 			return err
 		}
 
@@ -275,16 +293,19 @@ func (q *{{.ModelName}}Query) FindByPage(page, size int) ([]*{{.ModelName}}, int
 
 // ScanByPage 分页扫描
 func (q *{{.ModelName}}Query) ScanByPage(result interface{}, page, size int) (int64, error) {
+	if q.db.Statement.Model == nil {
+		q.db = q.db.Model(&{{.ModelName}}{})
+	}
 	var total int64
 
 	err := q.db.Transaction(func(tx *gorm.DB) error {
 		// 统计总数
-		if err := tx.Model(&{{.ModelName}}{}).Count(&total).Error; err != nil {
+		if err := tx.Count(&total).Error; err != nil {
 			return err
 		}
 
 		// 扫描数据
-		if err := tx.Offset((page - 1) * size).Limit(size).Scan(result).Error; err != nil {
+		if err := tx.Offset(page).Limit(size).Scan(result).Error; err != nil {
 			return err
 		}
 
