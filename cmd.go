@@ -11,7 +11,12 @@ import (
 	"gorm.io/gorm"
 )
 
+const Version = "v0.1.0"
+
 var (
+	// 版本信息
+	version = flag.Bool("version", false, "显示版本信息")
+
 	// 配置文件
 	configFile = flag.String("config", "", "配置文件路径")
 
@@ -54,6 +59,12 @@ func loadConfig(configFile string) (*Config, error) {
 
 func main() {
 	flag.Parse()
+
+	// 显示版本信息
+	if *version {
+		fmt.Printf("zero version %s\n", Version)
+		os.Exit(0)
+	}
 
 	var config *Config
 	var err error
