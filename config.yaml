@@ -1,5 +1,5 @@
 # 数据库连接
-dsn: root:wui11413@tcp(127.0.0.1:3306)/chilian_user?charset=utf8mb4&parseTime=True&loc=Local
+dsn: root:123456@tcp(127.0.0.1:3306)/chilian_user?charset=utf8mb4&parseTime=True&loc=Local
 # model生成目录路径
 dir: ./model
 # 指定生成的表

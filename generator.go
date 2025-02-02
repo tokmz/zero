@@ -2,15 +2,20 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"os"
-	"path/filepath"
+
+	// "path/filepath"
 	"strings"
 	"text/template"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+//go:embed template/*
+var templates embed.FS
 
 // Generate 生成代码
 func Generate(db *gorm.DB, opts *GenerateOptions) error {
@@ -26,7 +31,7 @@ func Generate(db *gorm.DB, opts *GenerateOptions) error {
 	}
 
 	// 加载模板
-	tmpl, err := loadTemplates(opts.Template)
+	tmpl, err := loadTemplates()
 	if err != nil {
 		return fmt.Errorf("加载模板失败: %v", err)
 	}
@@ -172,7 +177,7 @@ func generateFile(tmpl *template.Template, name, file string, data interface{}) 
 }
 
 // loadTemplates 加载模板文件
-func loadTemplates(templateDir string) (*template.Template, error) {
+func loadTemplates() (*template.Template, error) {
 	funcMap := template.FuncMap{
 		"generateTag": GenerateTag,
 		"toCamelCase": ToCamelCase,
@@ -191,46 +196,29 @@ func loadTemplates(templateDir string) (*template.Template, error) {
 	// 创建带有函数的模板
 	tmpl := template.New("").Funcs(funcMap)
 
-	// 如果没有指定模板目录，使用默认的template目录
-	if templateDir == "" {
-		templateDir = "template"
+	// 读取嵌入的模板文件
+	entries, err := templates.ReadDir("template")
+	if err != nil {
+		return nil, fmt.Errorf("读取模板目录失败: %v", err)
 	}
 
-	// 检查模板目录是否存在
-	if _, err := os.Stat(templateDir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("模板目录不存在: %s", templateDir)
-	}
+	// 遍历并解析每个模板文件
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tmpl") {
+			// 读取模板内容
+			content, err := templates.ReadFile("template/" + entry.Name())
+			if err != nil {
+				return nil, fmt.Errorf("读取模板文件失败 %s: %v", entry.Name(), err)
+			}
 
-	// 加载所有模板文件
-	templateFiles := []string{
-		filepath.Join(templateDir, "model.tmpl"),
-		filepath.Join(templateDir, "orm.tmpl"),
-		filepath.Join(templateDir, "vars.tmpl"),
-		filepath.Join(templateDir, "query.tmpl"),
-	}
+			// 获取模板名称（不包含扩展名）
+			templateName := strings.TrimSuffix(entry.Name(), ".tmpl")
 
-	// 检查所有必需的模板文件是否存在
-	for _, file := range templateFiles {
-		if _, err := os.Stat(file); os.IsNotExist(err) {
-			return nil, fmt.Errorf("模板文件不存在: %s", file)
-		}
-	}
-
-	// 读取每个模板文件的内容
-	for _, file := range templateFiles {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			return nil, fmt.Errorf("读取模板文件失败 %s: %v", file, err)
-		}
-
-		// 获取模板名称（不包含扩展名）
-		templateName := filepath.Base(file)
-		templateName = strings.TrimSuffix(templateName, ".tmpl")
-
-		// 解析模板内容
-		tmpl, err = tmpl.New(templateName).Parse(string(content))
-		if err != nil {
-			return nil, fmt.Errorf("解析模板文件失败 %s: %v", file, err)
+			// 解析模板内容
+			tmpl, err = tmpl.New(templateName).Parse(string(content))
+			if err != nil {
+				return nil, fmt.Errorf("解析模板文件失败 %s: %v", entry.Name(), err)
+			}
 		}
 	}
 
