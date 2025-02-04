@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	// "path/filepath"
 	"strings"
@@ -52,6 +53,11 @@ func Generate(db *gorm.DB, opts *GenerateOptions) error {
 	}
 
 	if err := generateVarsFile(tables, opts, tmpl); err != nil {
+		return err
+	}
+
+	// 生成field文件
+	if err := generateFieldFile(opts, tmpl); err != nil {
 		return err
 	}
 
@@ -223,4 +229,13 @@ func loadTemplates() (*template.Template, error) {
 	}
 
 	return tmpl, nil
+}
+
+func generateFieldFile(opts *GenerateOptions, tmpl *template.Template) error {
+	data := struct {
+		Package string
+	}{
+		Package: filepath.Base(opts.Dir),
+	}
+	return generateFile(tmpl, "field", filepath.Join(opts.Dir, "field.go"), data)
 }

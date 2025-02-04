@@ -314,4 +314,17 @@ func (q *{{.ModelName}}Query) ScanByPage(result interface{}, page, size int) (in
 
 	return total, err
 }
+
+// {{.ModelName}}Field 字段结构体
+type {{.ModelName}}Field struct {
+	{{- range .Fields}}
+	{{.Name | toCamelCase}} Field
+	{{- end}}
+}
+
+var {{.ModelName}}Fields = {{.ModelName}}Field{
+	{{- range .Fields}}
+	{{.Name | toCamelCase}}: Field{Name: "{{.Name}}"},
+	{{- end}}
+}
 {{end}}
