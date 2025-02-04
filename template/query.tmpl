@@ -14,6 +14,7 @@ import (
 // {{.ModelName}}Query {{.Comment}}查询
 type {{.ModelName}}Query struct {
 	db *gorm.DB
+	Field {{.ModelName}}Field
 }
 
 // Use 使用指定的数据库连接
