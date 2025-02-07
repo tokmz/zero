@@ -106,9 +106,20 @@ func (q *{{.TableName | ToCamel}}Query) Distinct(columns ...string) *{{.TableNam
 	return q
 }
 
+// {{.TableName | ToCamel}}Columns 表字段
+var {{.TableName | ToCamel}}Columns = struct {
+	{{- range .Fields}}
+	{{.Name | ToCamel}} string
+	{{- end}}
+}{
+	{{- range .Fields}}
+	{{.Name | ToCamel}}: "{{.Name}}",
+	{{- end}}
+}
+
 // Select 指定查询字段
-func (q *{{.TableName | ToCamel}}Query) Select(query interface{}, args ...interface{}) *{{.TableName | ToCamel}}Query {
-	q.db = q.db.Select(query, args...)
+func (q *{{.TableName | ToCamel}}Query) Select(columns ...string) *{{.TableName | ToCamel}}Query {
+	q.db = q.db.Select(columns)
 	return q
 }
 
