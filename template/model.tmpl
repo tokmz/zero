@@ -11,23 +11,23 @@ import (
 // {{.TableName | ToCamel}} {{.Comment}}
 type {{.TableName | ToCamel}} struct {
 	{{- range .Fields}}
-	{{.Name | ToCamel}} {{.Type}} `gorm:"{{.Tag}}" json:"{{.Name | ToSnake}}"` {{if .Comment}}// {{.Comment}}{{end}}
+	{{.Name | ToCamel}} {{.Type}} `{{BuildFieldTags .Name .ColumnType (not .IsNullable)}}`{{if .Comment}} // {{.Comment}}{{end}}
 	{{- end}}
 
 	{{- if .Relations}}
 	{{- range .Relations}}
-	{{- if eq .Type "HasOne"}}
+	{{- if eq .Type "has_one"}}
 	// HasOne {{.Comment}}
-	{{.Name | ToCamel}} *{{.Model}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}" json:"{{.Name | ToSnake}},omitempty"`
-	{{- else if eq .Type "BelongsTo"}}
+	{{.Name | ToCamel}} *{{.Model | ToCamel}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}" json:"{{.Name | ToSnake}},omitempty"`
+	{{- else if eq .Type "belongs_to"}}
 	// BelongsTo {{.Comment}}
-	{{.Name | ToCamel}} *{{.Model}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}" json:"{{.Name | ToSnake}},omitempty"`
-	{{- else if eq .Type "HasMany"}}
+	{{.Name | ToCamel}} *{{.Model | ToCamel}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}" json:"{{.Name | ToSnake}},omitempty"`
+	{{- else if eq .Type "has_many"}}
 	// HasMany {{.Comment}}
-	{{.Name | ToCamel}} []*{{.Model}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}" json:"{{.Name | ToSnake}},omitempty"`
-	{{- else if eq .Type "ManyToMany"}}
+	{{.Name | ToCamel}} []*{{.Model | ToCamel}} `gorm:"foreignKey:{{.ForeignKey}};references:{{.References}}" json:"{{.Name | ToSnake}},omitempty"`
+	{{- else if eq .Type "many2many"}}
 	// ManyToMany {{.Comment}}
-	{{.Name | ToCamel}} []*{{.Model}} `gorm:"many2many:{{.JoinTable}};foreignKey:{{.ForeignKey}};joinForeignKey:{{.JoinForeignKey}};references:{{.References}};joinReferences:{{.JoinReferences}}" json:"{{.Name | ToSnake}},omitempty"`
+	{{.Name | ToCamel}} []*{{.Model | ToCamel}} `gorm:"many2many:{{.JoinTable}};foreignKey:{{.ForeignKey}};joinForeignKey:{{.JoinForeignKey}};references:{{.References}};joinReferences:{{.JoinReferences}}" json:"{{.Name | ToSnake}},omitempty"`
 	{{- end}}
 	{{- end}}
 	{{- end}}
@@ -41,8 +41,11 @@ func (m *{{.TableName | ToCamel}}) TableName() string {
 // BeforeCreate 创建前回调
 func (m *{{.TableName | ToCamel}}) BeforeCreate(tx *gorm.DB) error {
 	{{- range .Fields}}
-	{{- if eq .Name "created_at" "updated_at"}}
-	m.{{.Name | ToCamel}} = time.Now()
+	{{- if eq .Name "created_at"}}
+	m.CreatedAt = time.Now()
+	{{- end}}
+	{{- if eq .Name "updated_at"}}
+	m.UpdatedAt = time.Now()
 	{{- end}}
 	{{- end}}
 	return nil
@@ -52,7 +55,7 @@ func (m *{{.TableName | ToCamel}}) BeforeCreate(tx *gorm.DB) error {
 func (m *{{.TableName | ToCamel}}) BeforeUpdate(tx *gorm.DB) error {
 	{{- range .Fields}}
 	{{- if eq .Name "updated_at"}}
-	m.{{.Name | ToCamel}} = time.Now()
+	m.UpdatedAt = time.Now()
 	{{- end}}
 	{{- end}}
 	return nil
@@ -60,37 +63,37 @@ func (m *{{.TableName | ToCamel}}) BeforeUpdate(tx *gorm.DB) error {
 
 {{- if .Relations}}
 {{- range .Relations}}
-{{- if eq .Type "HasOne"}}
+{{- if eq .Type "has_one"}}
 // Get{{.Name | ToCamel}} 获取{{.Comment}}
-func (m *{{$.TableName | ToCamel}}) Get{{.Name | ToCamel}}(db *gorm.DB) (*{{.Model}}, error) {
-	var result {{.Model}}
+func (m *{{$.TableName | ToCamel}}) Get{{.Name | ToCamel}}(db *gorm.DB) (*{{.Model | ToCamel}}, error) {
+	var result {{.Model | ToCamel}}
 	err := db.Model(m).Association("{{.Name | ToCamel}}").Find(&result)
 	return &result, err
 }
 
-{{- else if eq .Type "BelongsTo"}}
+{{- else if eq .Type "belongs_to"}}
 // Get{{.Name | ToCamel}} 获取{{.Comment}}
-func (m *{{$.TableName | ToCamel}}) Get{{.Name | ToCamel}}(db *gorm.DB) (*{{.Model}}, error) {
-	var result {{.Model}}
+func (m *{{$.TableName | ToCamel}}) Get{{.Name | ToCamel}}(db *gorm.DB) (*{{.Model | ToCamel}}, error) {
+	var result {{.Model | ToCamel}}
 	err := db.Model(m).Association("{{.Name | ToCamel}}").Find(&result)
 	return &result, err
 }
 
-{{- else if eq .Type "HasMany"}}
+{{- else if eq .Type "has_many"}}
 // Get{{.Name | ToCamel}} 获取{{.Comment}}列表
-func (m *{{$.TableName | ToCamel}}) Get{{.Name | ToCamel}}(db *gorm.DB) ([]*{{.Model}}, error) {
-	var results []*{{.Model}}
+func (m *{{$.TableName | ToCamel}}) Get{{.Name | ToCamel}}(db *gorm.DB) ([]*{{.Model | ToCamel}}, error) {
+	var results []*{{.Model | ToCamel}}
 	err := db.Model(m).Association("{{.Name | ToCamel}}").Find(&results)
 	return results, err
 }
 
 // Add{{.Name | ToCamel}} 添加{{.Comment}}
-func (m *{{$.TableName | ToCamel}}) Add{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model}}) error {
+func (m *{{$.TableName | ToCamel}}) Add{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model | ToCamel}}) error {
 	return db.Model(m).Association("{{.Name | ToCamel}}").Append(items)
 }
 
 // Remove{{.Name | ToCamel}} 移除{{.Comment}}
-func (m *{{$.TableName | ToCamel}}) Remove{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model}}) error {
+func (m *{{$.TableName | ToCamel}}) Remove{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model | ToCamel}}) error {
 	return db.Model(m).Association("{{.Name | ToCamel}}").Delete(items)
 }
 
@@ -104,26 +107,26 @@ func (m *{{$.TableName | ToCamel}}) Count{{.Name | ToCamel}}(db *gorm.DB) int64 
 	return db.Model(m).Association("{{.Name | ToCamel}}").Count()
 }
 
-{{- else if eq .Type "ManyToMany"}}
+{{- else if eq .Type "many2many"}}
 // Get{{.Name | ToCamel}} 获取{{.Comment}}列表
-func (m *{{$.TableName | ToCamel}}) Get{{.Name | ToCamel}}(db *gorm.DB) ([]*{{.Model}}, error) {
-	var results []*{{.Model}}
+func (m *{{$.TableName | ToCamel}}) Get{{.Name | ToCamel}}(db *gorm.DB) ([]*{{.Model | ToCamel}}, error) {
+	var results []*{{.Model | ToCamel}}
 	err := db.Model(m).Association("{{.Name | ToCamel}}").Find(&results)
 	return results, err
 }
 
 // Add{{.Name | ToCamel}} 添加{{.Comment}}
-func (m *{{$.TableName | ToCamel}}) Add{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model}}) error {
+func (m *{{$.TableName | ToCamel}}) Add{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model | ToCamel}}) error {
 	return db.Model(m).Association("{{.Name | ToCamel}}").Append(items)
 }
 
 // Remove{{.Name | ToCamel}} 移除{{.Comment}}
-func (m *{{$.TableName | ToCamel}}) Remove{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model}}) error {
+func (m *{{$.TableName | ToCamel}}) Remove{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model | ToCamel}}) error {
 	return db.Model(m).Association("{{.Name | ToCamel}}").Delete(items)
 }
 
 // Replace{{.Name | ToCamel}} 替换{{.Comment}}
-func (m *{{$.TableName | ToCamel}}) Replace{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model}}) error {
+func (m *{{$.TableName | ToCamel}}) Replace{{.Name | ToCamel}}(db *gorm.DB, items ...*{{.Model | ToCamel}}) error {
 	return db.Model(m).Association("{{.Name | ToCamel}}").Replace(items)
 }
 

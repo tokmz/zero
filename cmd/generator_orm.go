@@ -10,7 +10,6 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	tp "github.com/tokmz/zero/template"
 	"go/format"
 	"os"
 	"path/filepath"
@@ -43,13 +42,13 @@ func GenerateOrm(tables []*config.TableInfo, cfg *config.Config) error {
 	// 如果指定了自定义模板，则使用自定义模板
 	var err error
 	if cfg.Template != "" {
-		tmpl, err = tmpl.ParseFiles(cfg.Template)
+		tmpl, err = tmpl.ParseFiles(filepath.Join(filepath.Dir(cfg.Template), "orm.tmpl"))
 		if err != nil {
 			return fmt.Errorf("解析自定义模板失败: %v", err)
 		}
 	} else {
 		// 使用默认模板
-		tmpl, err = tmpl.Parse(tp.OrmTemplate)
+		tmpl, err = tmpl.ParseFiles("template/orm.tmpl")
 		if err != nil {
 			return fmt.Errorf("解析默认模板失败: %v", err)
 		}
@@ -57,7 +56,7 @@ func GenerateOrm(tables []*config.TableInfo, cfg *config.Config) error {
 
 	// 生成代码
 	var buf bytes.Buffer
-	if err = tmpl.ExecuteTemplate(&buf, "orm", data); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, "orm", data); err != nil {
 		return fmt.Errorf("生成代码失败: %v", err)
 	}
 
@@ -69,13 +68,13 @@ func GenerateOrm(tables []*config.TableInfo, cfg *config.Config) error {
 
 	// 创建输出目录
 	outputDir := cfg.Output.OrmDir
-	if err = os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("创建目录失败: %v", err)
 	}
 
 	// 写入文件
 	outputFile := filepath.Join(outputDir, "orm.go")
-	if err = os.WriteFile(outputFile, formatted, 0644); err != nil {
+	if err := os.WriteFile(outputFile, formatted, 0644); err != nil {
 		return fmt.Errorf("写入文件失败: %v", err)
 	}
 

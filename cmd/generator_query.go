@@ -9,8 +9,6 @@ import (
 	"strings"
 	"text/template"
 
-	tp "github.com/tokmz/zero/template"
-
 	"github.com/tokmz/zero/config"
 	"github.com/tokmz/zero/utils"
 )
@@ -55,13 +53,13 @@ func GenerateQuery(table *config.TableInfo, cfg *config.Config) error {
 	// 如果指定了自定义模板，则使用自定义模板
 	var err error
 	if cfg.Template != "" {
-		tmpl, err = tmpl.ParseFiles(cfg.Template)
+		tmpl, err = tmpl.ParseFiles(filepath.Join(filepath.Dir(cfg.Template), "query.tmpl"))
 		if err != nil {
 			return fmt.Errorf("解析自定义模板失败: %v", err)
 		}
 	} else {
 		// 使用默认模板
-		tmpl, err = tmpl.Parse(tp.QueryTemplate)
+		tmpl, err = tmpl.ParseFiles("template/query.tmpl")
 		if err != nil {
 			return fmt.Errorf("解析默认模板失败: %v", err)
 		}
@@ -69,7 +67,7 @@ func GenerateQuery(table *config.TableInfo, cfg *config.Config) error {
 
 	// 生成代码
 	var buf bytes.Buffer
-	if err = tmpl.ExecuteTemplate(&buf, "query", data); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, "query", data); err != nil {
 		return fmt.Errorf("生成代码失败: %v", err)
 	}
 
@@ -81,7 +79,7 @@ func GenerateQuery(table *config.TableInfo, cfg *config.Config) error {
 
 	// 创建输出目录
 	outputDir := filepath.Join(cfg.Output.OrmDir, "query")
-	if err = os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("创建目录失败: %v", err)
 	}
 
@@ -100,7 +98,7 @@ func GenerateQuery(table *config.TableInfo, cfg *config.Config) error {
 
 	// 写入文件
 	outputFile := filepath.Join(outputDir, filename)
-	if err = os.WriteFile(outputFile, formatted, 0644); err != nil {
+	if err := os.WriteFile(outputFile, formatted, 0644); err != nil {
 		return fmt.Errorf("写入文件失败: %v", err)
 	}
 

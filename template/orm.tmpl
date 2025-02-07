@@ -14,7 +14,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"gorm.io/gorm/clause"
+	"gorm.io/gorm/schema"
 	"gorm.io/plugin/dbresolver"
 )
 
@@ -83,7 +83,7 @@ func NewMysql(c Config) (*gorm.DB, error) {
 
 	gormConfig := &gorm.Config{
 		Logger: NewLogger(c.LogLevel, c.SlowThreshold),
-		NamingStrategy: clause.NamingStrategy{
+		NamingStrategy: &schema.NamingStrategy{
 			SingularTable: true,  // 使用单数表名
 		},
 		PrepareStmt: true,       // 缓存预编译语句
@@ -215,24 +215,24 @@ func (op *TracePlugin) Name() string {
 func (op *TracePlugin) Initialize(db *gorm.DB) error {
 	// 注册回调
 	callbacks := []string{"create", "query", "update", "delete", "row", "raw"}
-
+	
 	for _, callback := range callbacks {
 		switch callback {
 		case "create":
-			_ = db.Callback().Create().Before("gorm:create").Register("trace_plugin:before_create", op.trace)
+			_ = db.Callback().Create().Register("trace_plugin:before_create", op.trace)
 		case "query":
-			_ = db.Callback().Query().Before("gorm:query").Register("trace_plugin:before_query", op.trace)
+			_ = db.Callback().Query().Register("trace_plugin:before_query", op.trace)
 		case "update":
-			_ = db.Callback().Update().Before("gorm:update").Register("trace_plugin:before_update", op.trace)
+			_ = db.Callback().Update().Register("trace_plugin:before_update", op.trace)
 		case "delete":
-			_ = db.Callback().Delete().Before("gorm:delete").Register("trace_plugin:before_delete", op.trace)
+			_ = db.Callback().Delete().Register("trace_plugin:before_delete", op.trace)
 		case "row":
-			_ = db.Callback().Row().Before("gorm:row").Register("trace_plugin:before_row", op.trace)
+			_ = db.Callback().Row().Register("trace_plugin:before_row", op.trace)
 		case "raw":
-			_ = db.Callback().Raw().Before("gorm:raw").Register("trace_plugin:before_raw", op.trace)
+			_ = db.Callback().Raw().Register("trace_plugin:before_raw", op.trace)
 		}
 	}
-
+	
 	return nil
 }
 
@@ -242,34 +242,20 @@ func (op *TracePlugin) trace(db *gorm.DB) {
 		return
 	}
 
-	// 获取当前的 tracer
-	tracer := oteltrace.SpanFromContext(ctx).TracerProvider().Tracer("gorm")
-
-	// 创建新的 span
-	ctx, span := tracer.Start(ctx, fmt.Sprintf("gorm.%s", db.Statement.Table))
-	defer span.End()
-
-	// 更新 context
-	db.Statement.Context = ctx
+	span := oteltrace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
 
 	// 添加 SQL 相关属性
 	attrs := []attribute.KeyValue{
 		attribute.String("db.system", "mysql"),
 		attribute.String("db.statement", db.Statement.SQL.String()),
 		attribute.Int64("db.rows_affected", db.Statement.RowsAffected),
-		attribute.String("db.table", db.Statement.Table),
-		attribute.String("db.operation", db.Statement.Schema.Name),
 	}
 
-	// 添加错误信息
 	if db.Statement.Error != nil {
 		attrs = append(attrs, attribute.String("error", db.Statement.Error.Error()))
-		span.SetStatus(oteltrace.StatusCodeError, db.Statement.Error.Error())
-	}
-
-	// 添加变量信息
-	if len(db.Statement.Vars) > 0 {
-		attrs = append(attrs, attribute.String("db.vars", fmt.Sprintf("%v", db.Statement.Vars)))
 	}
 
 	span.SetAttributes(attrs...)
@@ -286,14 +272,10 @@ func buildReplicaDialectors(slaves []DSNConfig) []gorm.Dialector {
 
 // buildPolicy 构建负载均衡策略
 func buildPolicy(policyType string) dbresolver.Policy {
-	switch policyType {
-	case "random":
+	if policyType == "random" {
 		return dbresolver.RandomPolicy{}
-	case "weight":
-		return dbresolver.WeightRandomPolicy{}
-	default:
-		return dbresolver.RoundRobinPolicy{}
 	}
+	return dbresolver.RoundRobinPolicy()
 }
 
 // Ping 检查数据库连接是否正常
@@ -304,4 +286,4 @@ func Ping(db *gorm.DB) error {
 	}
 	return sqlDB.Ping()
 }
-{{end}}
+{{end}} 
