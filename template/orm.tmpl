@@ -4,11 +4,11 @@
 package {{.Package}}
 
 import (
-	"context"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel/attribute"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	"gorm.io/driver/mysql"
@@ -21,10 +21,10 @@ import (
 // Config 数据库配置
 type Config struct {
 	// Master 主库配置，用于处理写操作和事务
-	Master DSNConfig
+	Master string // 数据源连接串，格式：user:pass@tcp(host:port)/dbname?charset=utf8mb4&parseTime=True&loc=Local
 
 	// Slaves 从库配置列表，用于处理读操作，支持多个从库实现负载均衡
-	Slaves []DSNConfig
+	Slaves []string
 
 	// MaxOpenConns 数据库连接池最大连接数
 	// 限制与数据库建立的最大连接数，避免因连接数过多导致数据库负载过高
@@ -45,7 +45,6 @@ type Config struct {
 	// Policy 从库负载均衡策略
 	// 可选值：
 	// - "random": 随机选择从库
-	// - "weight": 权重随机选择从库
 	// - "round": 轮询方式选择从库
 	Policy string
 
@@ -59,17 +58,15 @@ type Config struct {
 
 	// LogLevel 日志级别
 	LogLevel logger.LogLevel
-}
 
-// DSNConfig 数据源配置
-type DSNConfig struct {
-	DSN string // 数据源连接串，格式：user:pass@tcp(host:port)/dbname?charset=utf8mb4&parseTime=True&loc=Local
+	// EnableLog 是否启用SQL日志
+	EnableLog bool
 }
 
 // SourceConfig 数据源配置
 type SourceConfig struct {
-	Master   DSNConfig
-	Replicas []DSNConfig
+	Master   string
+	Replicas []string
 	Tables   []string
 }
 
@@ -77,19 +74,34 @@ type SourceConfig struct {
 // 主库用于处理写操作和事务
 // 从库用于处理读操作，支持多个从库和负载均衡
 func NewMysql(c Config) (*gorm.DB, error) {
-	if c.Master.DSN == "" {
+	if c.Master == "" {
 		return nil, fmt.Errorf("master dsn required")
 	}
 
-	gormConfig := &gorm.Config{
-		Logger: NewLogger(c.LogLevel, c.SlowThreshold),
-		NamingStrategy: &schema.NamingStrategy{
-			SingularTable: true,  // 使用单数表名
-		},
-		PrepareStmt: true,       // 缓存预编译语句
+	var logLevel logger.LogLevel
+	if !c.EnableLog {
+		logLevel = logger.Silent
+	} else {
+		logLevel = c.LogLevel
 	}
 
-	db, err := gorm.Open(mysql.Open(c.Master.DSN), gormConfig)
+	gormConfig := &gorm.Config{
+		Logger: logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				SlowThreshold:             c.SlowThreshold,
+				LogLevel:                  logLevel,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                  true,
+			},
+		),
+		NamingStrategy: &schema.NamingStrategy{
+			SingularTable: true, // 使用单数表名
+		},
+		PrepareStmt: true, // 缓存预编译语句
+	}
+
+	db, err := gorm.Open(mysql.Open(c.Master), gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("connect master failed: %v", err)
 	}
@@ -97,7 +109,7 @@ func NewMysql(c Config) (*gorm.DB, error) {
 	// 配置读写分离
 	if len(c.Slaves) > 0 {
 		resolver := dbresolver.Register(dbresolver.Config{
-			Sources:  []gorm.Dialector{mysql.Open(c.Master.DSN)},
+			Sources:  []gorm.Dialector{mysql.Open(c.Master)},
 			Replicas: buildReplicaDialectors(c.Slaves),
 			Policy:   buildPolicy(c.Policy),
 		})
@@ -110,7 +122,7 @@ func NewMysql(c Config) (*gorm.DB, error) {
 					tables[i] = source.Tables[i]
 				}
 				resolver = resolver.Register(dbresolver.Config{
-					Sources:  []gorm.Dialector{mysql.Open(source.Master.DSN)},
+					Sources:  []gorm.Dialector{mysql.Open(source.Master)},
 					Replicas: buildReplicaDialectors(source.Replicas),
 				}, tables...)
 			}
@@ -143,66 +155,6 @@ func NewMysql(c Config) (*gorm.DB, error) {
 	}
 
 	return db, nil
-}
-
-// Logger GORM 日志实现
-type Logger struct {
-	logger.Interface
-	LogLevel      logger.LogLevel
-	SlowThreshold time.Duration
-}
-
-// NewLogger 创建日志实例
-func NewLogger(level logger.LogLevel, slowThreshold time.Duration) logger.Interface {
-	return &Logger{
-		LogLevel:      level,
-		SlowThreshold: slowThreshold,
-	}
-}
-
-func (l *Logger) LogMode(level logger.LogLevel) logger.Interface {
-	newLogger := *l
-	newLogger.LogLevel = level
-	return &newLogger
-}
-
-func (l *Logger) Info(ctx context.Context, msg string, args ...interface{}) {
-	if l.LogLevel >= logger.Info {
-		logx.WithContext(ctx).Infof(msg, args...)
-	}
-}
-
-func (l *Logger) Warn(ctx context.Context, msg string, args ...interface{}) {
-	if l.LogLevel >= logger.Warn {
-		logx.WithContext(ctx).Slowf(msg, args...)
-	}
-}
-
-func (l *Logger) Error(ctx context.Context, msg string, args ...interface{}) {
-	if l.LogLevel >= logger.Error {
-		logx.WithContext(ctx).Errorf(msg, args...)
-	}
-}
-
-func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
-	if l.LogLevel <= logger.Silent {
-		return
-	}
-
-	elapsed := time.Since(begin)
-	sql, rows := fc()
-	
-	// 构建日志内容
-	logContent := fmt.Sprintf("[%.3fms] [rows:%v] %s", float64(elapsed.Nanoseconds())/1e6, rows, sql)
-	
-	switch {
-	case err != nil && l.LogLevel >= logger.Error:
-		logx.WithContext(ctx).Errorf("%s, %s", logContent, err.Error())
-	case elapsed > l.SlowThreshold && l.SlowThreshold != 0 && l.LogLevel >= logger.Warn:
-		logx.WithContext(ctx).Slowf("%s", logContent)
-	case l.LogLevel >= logger.Info:
-		logx.WithContext(ctx).Infof("%s", logContent)
-	}
 }
 
 // TracePlugin 链路追踪插件
@@ -262,10 +214,10 @@ func (op *TracePlugin) trace(db *gorm.DB) {
 }
 
 // buildReplicaDialectors 构建从库连接
-func buildReplicaDialectors(slaves []DSNConfig) []gorm.Dialector {
+func buildReplicaDialectors(slaves []string) []gorm.Dialector {
 	replicas := make([]gorm.Dialector, 0, len(slaves))
 	for _, slave := range slaves {
-		replicas = append(replicas, mysql.Open(slave.DSN))
+		replicas = append(replicas, mysql.Open(slave))
 	}
 	return replicas
 }
