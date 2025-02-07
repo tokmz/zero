@@ -1,0 +1,7 @@
+# 忽略操作系统生成的文件
+.DS_Store      # macOS
+Thumbs.db      # Windows
+.idea
+.vscode
+orm/
+test/
