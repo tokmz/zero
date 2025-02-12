@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/tokmz/zero/config"
 	"github.com/tokmz/zero/utils"
@@ -22,8 +23,19 @@ func Init(cfg *config.Config) error {
 	fmt.Println("配置信息:")
 	fmt.Printf("  DSN: %s\n", cfg.DSN)
 	fmt.Printf("  输出目录:\n")
-	fmt.Printf("    - Model: %s\n", cfg.Output.ModelDir)
-	fmt.Printf("    - Query: %s\n", cfg.Output.QueryDir)
+	// 从路径中获取目录名
+	modelDirParts := strings.Split(strings.Trim(cfg.Output.ModelDir, "/"), "/")
+	queryDirParts := strings.Split(strings.Trim(cfg.Output.QueryDir, "/"), "/")
+	modelDirName := "model"
+	queryDirName := "query"
+	if len(modelDirParts) > 0 {
+		modelDirName = modelDirParts[len(modelDirParts)-1]
+	}
+	if len(queryDirParts) > 0 {
+		queryDirName = queryDirParts[len(queryDirParts)-1]
+	}
+	fmt.Printf("    - Model: %s (%s)\n", cfg.Output.ModelDir, modelDirName)
+	fmt.Printf("    - Query: %s (%s)\n", cfg.Output.QueryDir, queryDirName)
 	fmt.Printf("  表名: %v\n", cfg.Tables)
 	fmt.Printf("  命名风格: %s\n", cfg.Style)
 	// if len(cfg.Relations) > 0 {

@@ -23,18 +23,34 @@ import (
 
 // GenerateQuery 生成 Query 代码
 func GenerateQuery(table *config.TableInfo, cfg *config.Config) error {
-	// 获取包名（固定使用 query）
-	packageName := "query"
+	// 获取包名（从目录路径中获取）
+	dirParts := strings.Split(strings.Trim(cfg.Output.QueryDir, "/"), "/")
+	var packageName string
+	if len(dirParts) > 0 {
+		packageName = dirParts[len(dirParts)-1]
+	} else {
+		packageName = "query" // 默认包名
+	}
+
+	// 获取 model 包名
+	modelDirParts := strings.Split(strings.Trim(cfg.Output.ModelDir, "/"), "/")
+	var modelPackage string
+	if len(modelDirParts) > 0 {
+		modelPackage = modelDirParts[len(modelDirParts)-1]
+	} else {
+		modelPackage = "model" // 默认包名
+	}
 
 	// 准备模板数据
 	data := map[string]interface{}{
-		"Package":    packageName,
-		"TableName":  table.Name,
-		"Comment":    table.Comment,
-		"Fields":     table.Fields,
-		"Relations":  table.Relations,
-		"ModelPath":  strings.TrimPrefix(cfg.Output.ModelDir, "./"),
-		"ModuleName": cfg.ModuleName,
+		"Package":      packageName,
+		"TableName":    table.Name,
+		"Comment":      table.Comment,
+		"Fields":       table.Fields,
+		"Relations":    table.Relations,
+		"ModelPath":    strings.TrimPrefix(cfg.Output.ModelDir, "./"),
+		"ModuleName":   cfg.ModuleName,
+		"ModelPackage": modelPackage,
 	}
 
 	// 加载模板
@@ -84,7 +100,7 @@ func GenerateQuery(table *config.TableInfo, cfg *config.Config) error {
 	}
 
 	// 创建输出目录
-	outputDir := filepath.Join(cfg.Output.OrmDir, "query")
+	outputDir := cfg.Output.QueryDir
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("创建目录失败: %v", err)
 	}

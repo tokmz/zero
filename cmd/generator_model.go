@@ -23,8 +23,14 @@ import (
 
 // GenerateModel 生成 Model 代码
 func GenerateModel(table *config.TableInfo, cfg *config.Config) error {
-	// 获取包名（固定使用 model）
-	packageName := "model"
+	// 获取包名（从目录路径中获取）
+	dirParts := strings.Split(strings.Trim(cfg.Output.ModelDir, "/"), "/")
+	var packageName string
+	if len(dirParts) > 0 {
+		packageName = dirParts[len(dirParts)-1]
+	} else {
+		packageName = "model" // 默认包名
+	}
 
 	// 准备模板数据
 	data := map[string]interface{}{
@@ -81,7 +87,7 @@ func GenerateModel(table *config.TableInfo, cfg *config.Config) error {
 	}
 
 	// 创建输出目录
-	outputDir := filepath.Join(cfg.Output.OrmDir, "model")
+	outputDir := cfg.Output.ModelDir
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("创建目录失败: %v", err)
 	}

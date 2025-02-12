@@ -75,6 +75,11 @@ var genCmd = &cobra.Command{
 			flags.Template = viper.GetString("template")
 			flags.Style = viper.GetString("style")
 			cfg.ModuleName = viper.GetString("module_name")
+			
+			// 读取输出目录配置
+			cfg.Output.OrmDir = viper.GetString("output.orm_dir")
+			cfg.Output.ModelDir = viper.GetString("output.model_dir")
+			cfg.Output.QueryDir = viper.GetString("output.query_dir")
 
 			// 读取关联关系配置
 			if relations := viper.GetStringMap("relations"); len(relations) > 0 {

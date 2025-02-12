@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"{{.ModuleName}}/{{.ModelPath}}"
+	{{.ModelPackage}} "{{.ModuleName}}/{{.ModelPath}}"
 )
 
 // {{.TableName | ToCamel}}Query {{.Comment}}查询结构体
@@ -28,7 +28,7 @@ func (q *{{.TableName | ToCamel}}Query) clone() *{{.TableName | ToCamel}}Query {
 // New{{.TableName | ToCamel}}Query 创建{{.Comment}}查询对象
 func New{{.TableName | ToCamel}}Query(db *gorm.DB) *{{.TableName | ToCamel}}Query {
 	return &{{.TableName | ToCamel}}Query{
-		db: db.Model(&model.{{.TableName | ToCamel}}{}),
+		db: db.Model(&{{.ModelPackage}}.{{.TableName | ToCamel}}{}),
 	}
 }
 
@@ -47,29 +47,29 @@ func (q *{{.TableName | ToCamel}}Query) Debug() *{{.TableName | ToCamel}}Query {
 }
 
 // First 获取第一条记录
-func (q *{{.TableName | ToCamel}}Query) First() (*model.{{.TableName | ToCamel}}, error) {
-	var result model.{{.TableName | ToCamel}}
+func (q *{{.TableName | ToCamel}}Query) First() (*{{.ModelPackage}}.{{.TableName | ToCamel}}, error) {
+	var result {{.ModelPackage}}.{{.TableName | ToCamel}}
 	err := q.db.First(&result).Error
 	return &result, err
 }
 
 // Take 获取一条记录，不指定排序
-func (q *{{.TableName | ToCamel}}Query) Take() (*model.{{.TableName | ToCamel}}, error) {
-	var result model.{{.TableName | ToCamel}}
+func (q *{{.TableName | ToCamel}}Query) Take() (*{{.ModelPackage}}.{{.TableName | ToCamel}}, error) {
+	var result {{.ModelPackage}}.{{.TableName | ToCamel}}
 	err := q.db.Take(&result).Error
 	return &result, err
 }
 
 // Last 获取最后一条记录
-func (q *{{.TableName | ToCamel}}Query) Last() (*model.{{.TableName | ToCamel}}, error) {
-	var result model.{{.TableName | ToCamel}}
+func (q *{{.TableName | ToCamel}}Query) Last() (*{{.ModelPackage}}.{{.TableName | ToCamel}}, error) {
+	var result {{.ModelPackage}}.{{.TableName | ToCamel}}
 	err := q.db.Last(&result).Error
 	return &result, err
 }
 
 // Find 查询多条记录
-func (q *{{.TableName | ToCamel}}Query) Find() ([]*model.{{.TableName | ToCamel}}, error) {
-	var results []*model.{{.TableName | ToCamel}}
+func (q *{{.TableName | ToCamel}}Query) Find() ([]*{{.ModelPackage}}.{{.TableName | ToCamel}}, error) {
+	var results []*{{.ModelPackage}}.{{.TableName | ToCamel}}
 	err := q.db.Find(&results).Error
 	return results, err
 }
@@ -80,15 +80,15 @@ func (q *{{.TableName | ToCamel}}Query) FindInBatches(dest interface{}, batchSiz
 }
 
 // FirstOrInit 获取第一条记录，不存在则初始化
-func (q *{{.TableName | ToCamel}}Query) FirstOrInit() (*model.{{.TableName | ToCamel}}, error) {
-	var result model.{{.TableName | ToCamel}}
+func (q *{{.TableName | ToCamel}}Query) FirstOrInit() (*{{.ModelPackage}}.{{.TableName | ToCamel}}, error) {
+	var result {{.ModelPackage}}.{{.TableName | ToCamel}}
 	err := q.db.FirstOrInit(&result).Error
 	return &result, err
 }
 
 // FirstOrCreate 获取第一条记录，不存在则创建
-func (q *{{.TableName | ToCamel}}Query) FirstOrCreate() (*model.{{.TableName | ToCamel}}, error) {
-	var result model.{{.TableName | ToCamel}}
+func (q *{{.TableName | ToCamel}}Query) FirstOrCreate() (*{{.ModelPackage}}.{{.TableName | ToCamel}}, error) {
+	var result {{.ModelPackage}}.{{.TableName | ToCamel}}
 	err := q.db.FirstOrCreate(&result).Error
 	return &result, err
 }
@@ -201,17 +201,17 @@ func (q *{{.TableName | ToCamel}}Query) Having(query interface{}, args ...interf
 }
 
 // Create 创建记录
-func (q *{{.TableName | ToCamel}}Query) Create(data *model.{{.TableName | ToCamel}}) error {
+func (q *{{.TableName | ToCamel}}Query) Create(data *{{.ModelPackage}}.{{.TableName | ToCamel}}) error {
 	return q.db.Create(data).Error
 }
 
 // CreateInBatches 批量创建记录
-func (q *{{.TableName | ToCamel}}Query) CreateInBatches(data []*model.{{.TableName | ToCamel}}, batchSize int) error {
+func (q *{{.TableName | ToCamel}}Query) CreateInBatches(data []*{{.ModelPackage}}.{{.TableName | ToCamel}}, batchSize int) error {
 	return q.db.CreateInBatches(data, batchSize).Error
 }
 
 // Save 保存记录
-func (q *{{.TableName | ToCamel}}Query) Save(data *model.{{.TableName | ToCamel}}) error {
+func (q *{{.TableName | ToCamel}}Query) Save(data *{{.ModelPackage}}.{{.TableName | ToCamel}}) error {
 	return q.db.Save(data).Error
 }
 
@@ -236,9 +236,9 @@ func (q *{{.TableName | ToCamel}}Query) UpdateColumns(values interface{}) error 
 }
 
 // Delete 删除记录
-func (q *{{.TableName | ToCamel}}Query) Delete(data ...*model.{{.TableName | ToCamel}}) error {
+func (q *{{.TableName | ToCamel}}Query) Delete(data ...*{{.ModelPackage}}.{{.TableName | ToCamel}}) error {
 	if len(data) == 0 {
-		return q.db.Delete(&model.{{.TableName | ToCamel}}{}).Error
+		return q.db.Delete(&{{.ModelPackage}}.{{.TableName | ToCamel}}{}).Error
 	}
 	return q.db.Delete(data).Error
 }
