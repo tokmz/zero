@@ -10,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/tokmz/zero/config"
+	tm "github.com/tokmz/zero/template"
 	"github.com/tokmz/zero/utils"
 )
 
@@ -59,7 +60,12 @@ func GenerateQuery(table *config.TableInfo, cfg *config.Config) error {
 		}
 	} else {
 		// 使用默认模板
-		tmpl, err = tmpl.ParseFiles("template/query.tmpl")
+		// 使用嵌入的模板文件
+		tmplContent, err := tm.Templates.ReadFile("query.tmpl")
+		if err != nil {
+			return fmt.Errorf("读取模板文件失败: %v", err)
+		}
+		tmpl, err = tmpl.Parse(string(tmplContent))
 		if err != nil {
 			return fmt.Errorf("解析默认模板失败: %v", err)
 		}
