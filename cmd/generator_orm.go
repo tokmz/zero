@@ -33,8 +33,9 @@ func GenerateOrm(tables []*config.TableInfo, cfg *config.Config) error {
 
 	// 准备模板数据
 	data := map[string]interface{}{
-		"Package": packageName,
-		"Tables":  tables,
+		"Package":       packageName,
+		"Tables":        tables,
+		"EnableTracing": cfg.EnableTracing,
 	}
 
 	// 加载模板

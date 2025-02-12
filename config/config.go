@@ -2,14 +2,15 @@ package config
 
 // Config 配置结构体
 type Config struct {
-	DSN        string                `yaml:"dsn"`
-	Output     OutputConfig          `yaml:"output"`
-	Tables     []string              `yaml:"tables"`
-	Prefix     string                `yaml:"prefix"`
-	Style      string                `yaml:"style"`
-	Template   string                `yaml:"template"`
-	Relations  map[string][]Relation `yaml:"relations"`
-	ModuleName string                `yaml:"module_name" mapstructure:"module_name"`
+	DSN           string                `yaml:"dsn"`
+	Output        OutputConfig          `yaml:"output"`
+	Tables        []string              `yaml:"tables"`
+	Prefix        string                `yaml:"prefix"`
+	Style         string                `yaml:"style"`
+	Template      string                `yaml:"template"`
+	Relations     map[string][]Relation `yaml:"relations"`
+	ModuleName    string                `yaml:"module_name" mapstructure:"module_name"`
+	EnableTracing bool                  `yaml:"enable_tracing" mapstructure:"enable_tracing"` // 是否启用链路追踪
 }
 
 // OutputConfig 输出目录配置
